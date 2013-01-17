@@ -36,7 +36,7 @@ function [temp_array]  =  hot_plate(nx, ny, ta, tb, tc, td, tol)
 %
 %AUTHOR
 %    Kevin Granger <kmg2728@rit.edu>
-%    2013-01-14
+%    2013-01-18
 
 %{
 Additional Documentation:
@@ -44,28 +44,29 @@ Additional Documentation:
 MATH
 
     This program attempts to solve the partial differential equation
-    d^2 T / dx^2 = 0 iteratively. It does this by breaking the length of X
-    into a given amount of small pieces, and averaging the value of each
-    piece between the pieces that surround it. The reasoning behind the
-    average was determined by expressing the "second difference" of each of
-    the temperature values in an equation, and rearranging to determine
-    what the value of the current piece is when the second difference is 0.
+    d^2 T / dx^2 = 0 = d^2 T / dy^2 iteratively. It does this by breaking 
+    the plate into a given amount of small pieces in each dimension, and
+    averaging the value of each piece between the pieces that surround it.
+    The reasoning behind the average was determined by expressing the
+    "second difference" of each of the temperature values in an equation,
+    and rearranging to determine what the value of the current piece is
+    when the second difference is 0.
 
-    In other words, for a piece i compared to the piece on the left (L) and
-    a piece on the right (R), the second difference between the values
-    should be zero:
+    In other words, for a piece i compared to the pieces on the left (L),
+    right (R), top (T), and bottom (B), the second difference between the
+    values should be zero:
 
-        (TR - Ti) - (Ti - TL) = 0
+        (TR - Ti) - (Ti - TL) = 0 = (TT - Ti) - (Ti - TB) = 0
 
     or when rearranged:
 
-        Ti = (TR + TL) / 2
+        Ti = (TR + TL + TB + TT) / 4
 
     hence the average.
 
     New values are computed until the maximum fractional change for any
-    piece is less than the determined convergence factor, which is 0.01
-    divided by the number of pieces the rod is broken into.
+    piece is less than the determined convergence factor, which is given as
+    an argument.
 
 
 VARIABLE NAMING
@@ -81,7 +82,7 @@ VARIABLE NAMING
 % Check starting values :
 if min([ta tb tc td]) <= 0
     error('Temperatures are given in Kelvin, and as such must be above absolute zero.')
-elseif min([nx ny]) < 1 || rem([nx ny],1) ~= 0
+elseif (min([nx ny]) < 1) || (max(rem([nx ny],1)) ~= 0)
     error('You must give a positive, nonzero, integer number of pieces to break the rod into.')
 end
 
@@ -98,45 +99,38 @@ old_array(ny+2,:) = ta; % bottom
 old_array([1 ny+2],[1 nx+2]) = 0; % zero the corners for readability
 temp_array = old_array;
 
-fprintf('Starting Temps: %u', old_array);
-
 % This is the fractional change in temperature.
 % So the while loop runs at least once, make the fractional error larger
 % than any possible convergence factor.
-frac = 1;
-
-% This is the convergence factor.
-% The data needs to be more accurate as the rod is broken into more pieces.
-convergence = tol / (nx * ny);
+frac = Inf;
 
 % Keep iterating until the fractional change is less than our determined
 % convergence factor.
-while frac > convergence
+while frac > tol
     
     % For each piece of rod, calculate the average temperature between the
     % two other pieces.
     % Since the array also includes the two non-changing values at the end,
     % start at position 2 and go until we've reached the end of the rod
     % (num+1 since it's 1-indexed, and we're starting at 2)
-    for i=2:num+1
-        
+    for i=2:ny+1
+        for j=2:nx+1
         % The old temperatures are used so that values can't blow up, in
         % certain cases.
-		temp_array(i) = (old_array(i-1) + old_array(i+1)) / 2;
+		temp_array(i,j) = mean([mean(old_array(i,[j-1 j+1])) mean(old_array([i-1 i+1],j))]);
+        end
     end
     
     % We care about the maximum fractional change for any piece. It doesn't
     % matter if the one on the end isn't changing much, if we're still
     % calculating the center pieces, keep going!
-	frac = max(abs(temp_array - old_array) ./ old_array);
+	frac = max(max(abs(temp_array - old_array) ./ old_array));
     
     % What's new is old. Take our new values and get ready to use them for
     % next time, if there is a next time.
     old_array = temp_array;
 end
 
-% Shave off the temperatures of the left and right ends, giving back only
-% the temperatures of the pieces of the rod.
-temp_array = temp_array(2:num+1);
-
-% DON'T FORGET TO TRANSLATE COORDINATE SYSTEMS
+% Shave off the parts of the matrix that aren't the plate itself, and
+% rotate it so it fits with the desired coordinate system.
+temp_array = rot90(temp_array(2:ny+1,2:nx+1),3);
