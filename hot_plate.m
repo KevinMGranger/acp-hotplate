@@ -134,3 +134,7 @@ end
 % Shave off the parts of the matrix that aren't the plate itself, and
 % rotate it so it fits with the desired coordinate system.
 temp_array = rot90(temp_array(2:ny+1,2:nx+1),3);
+
+surf(rot90(temp_array));
+colorbar;
+view(2);
